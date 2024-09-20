@@ -7,8 +7,6 @@ from scipy import spatial
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial import distance_matrix
 from scipy.spatial.distance import pdist, squareform
-import matplotlib.pyplot as plt
-from scipy.stats import norm
 import scipy.stats as stats
 import math
 import annoy
@@ -47,13 +45,25 @@ def sample_graph(G: nx.Graph,
     if num_sampled <= 2:
         raise ValueError('< 2 nodes sampled in subgraph. Increase sample size.')
 
+    # Gather values and determine max/min fitness values
     values = np.array([G.nodes[node]['value'] for node in G])
     max_value = values.max()
     min_value = values.min()
+    
+    # Get the list of nodes, excluding max and min value nodes
     eligible_nodes = [node for node in G if G.nodes[node]['value'] not in (max_value, min_value)]
-    num_sampled = min(num_sampled - 2, len(eligible_nodes))
-    sampled_nodes = np.random.choice(eligible_nodes, size=num_sampled, replace=False).tolist()
-    sampled_nodes.extend([node for node in G if G.nodes[node]['value'] in (max_value, min_value)])
+    
+    # Ensure we don't sample more than needed
+    if len(eligible_nodes) > (num_sampled - 2):
+        sampled_nodes = np.random.choice(eligible_nodes, size=num_sampled - 2, replace=False).tolist()
+    else:
+        sampled_nodes = eligible_nodes
+
+    # Add exactly one node with max and one with min value
+    sampled_nodes.append(next(node for node in G if G.nodes[node]['value'] == max_value))
+    sampled_nodes.append(next(node for node in G if G.nodes[node]['value'] == min_value))
+    
+    # Build the subgraph and get sampled values
     G_sampled = G.subgraph(sampled_nodes).copy()
     sampled_values = [G_sampled.nodes[node]['value'] for node in sampled_nodes]
 
@@ -204,6 +214,9 @@ def add_ohe_knn_edges(G: nx.Graph,
                 if current_node != sequences[neighbor_node] and not G.has_edge(current_node, sequences[neighbor_node]):
                     distance = distances[idx][neighbor_idx]
                     G.add_edge(current_node, sequences[neighbor_node], distance=distance, inv_weight=1/(distance))
+    
+    # Add edges between disconnected components to ensure full connectivity
+    ensure_full_connectivity(G=G)
 
 def add_ohe_knn_edges_approx(G: nx.Graph,
                              k: int):
@@ -249,8 +262,55 @@ def add_ohe_knn_edges_approx(G: nx.Graph,
             if i != j:
                 if not G.has_edge(sequences[i], sequences[j]):
                     G.add_edge(sequences[i], sequences[j], distance=distance, inv_weight=1/(distance))
+    
+    # Add edges between disconnected components to ensure full connectivity
+    ensure_full_connectivity(G=G)
 
-def add_hamming_edges(G: nx.Graph):
+def ensure_full_connectivity(G: nx.Graph):
+    '''
+    Function to ensure that a graph is fully connected by adding edges
+    between disconnected components based on the closest pair of nodes
+    between components.
+
+    Arguments:
+    ----------
+    G: networkX.Graph
+        The graph to ensure full connectivity.
+    '''
+    if not nx.is_connected(G):
+        
+        print('Connecting components')
+        components = list(nx.connected_components(G))
+        
+        # Sort components by size (optional, to connect smaller components first)
+        components.sort(key=len, reverse=True)
+
+        # Iteratively connect all components
+        for i in range(1, len(components)):
+            component_a = components[i-1]
+            component_b = components[i]
+
+            min_distance = float('inf')
+            best_pair = None
+
+            # Find the closest pair of nodes between component_a and component_b
+            for node_a in component_a:
+                for node_b in component_b:
+                    # Calculate the distance between node_a and node_b
+                    distance = np.linalg.norm(G.nodes[node_a]['ohe'] - G.nodes[node_b]['ohe'])
+                    if distance < min_distance:
+                        min_distance = distance
+                        best_pair = (node_a, node_b)
+            
+            # Add the edge between the closest pair of nodes
+            if best_pair:
+                G.add_edge(best_pair[0],
+                           best_pair[1],
+                           distance=min_distance,
+                           inv_weight=1/min_distance)
+
+def add_hamming_edges(G: nx.Graph,
+                      n_characters: int):
     '''
     Inplace function to compute hamming neighbor edges to a OHE graph.
     Hamming edges are computed using scipy.spatial.distance_matrix,
@@ -260,29 +320,29 @@ def add_hamming_edges(G: nx.Graph):
     ----------
     G: networkX.Graph
         A networkX graph of OHE sequences as nodes.  
+
+    n_characters: int
+        The number of characters in the OHE array.
     '''
     sequences = list(G.nodes())
     ohe_list = [G.nodes[seq]['ohe'] for seq in sequences]
     
     print('Computing all vs. all OHE distance matrix.')
-    dist_mat = squareform(pdist(ohe_list, 'hamming')) * ohe_list.shape[1]    
+    dist_mat = squareform(pdist(ohe_list, metric='hamming')) * np.array(ohe_list).shape[1] / n_characters
+
     print('Done.')
 
-    # Since a single amino acid change in one-hot encoding would result in 
-    # a Euclidean distance of sqrt(2).
-    threshold = np.sqrt(2)
+    # Hamming distance threshold set to 1 for single amino acid change
+    threshold = 1
     
     for i, row in tqdm(enumerate(dist_mat), desc='Adding hamming edges.'):
         current_node = sequences[i]
         for j, distance in enumerate(row):
-            if i != j and distance <= threshold:
-                # This condition now properly checks for the "Hamming distance" of 1 
-                # in terms of single amino acid changes in OHE sequences.
-                # Adjusted to allow for slight numerical inaccuracies.
+            if i != j and distance <= threshold + 1e-9:  # Add small tolerance
                 if not G.has_edge(current_node, sequences[j]):
                     G.add_edge(current_node, sequences[j])
 
-def add_hamming_edges_approx(G: nx.Graph,
+def _add_hamming_edges_approx(G: nx.Graph, #BUG Broken
                              n: int):
     '''
     Inplace function to compute hamming neighbor edges to a OHE graph.
@@ -384,10 +444,13 @@ def build_ohe_graph(seq_ls: list,
     if edges:
         if hamming_edges:
             if approximate:
-                add_hamming_edges_approx(G=G,
+                raise NotImplementedError('Approximate hamming edges implmenetation broken.')
+            
+                _add_hamming_edges_approx(G=G,
                                         n=n)
             else:
-                add_hamming_edges(G=G)
+                add_hamming_edges(G=G,
+                                  n_characters=len(ohe_dict.keys()))
 
         else:
             k = int(np.sqrt(len(G)))
@@ -716,115 +779,3 @@ def compute_elementary_landscape(G: nx.Graph,
         G_elementary.nodes[node]['value'] = nth_eigenvector[i]
     
     return G_elementary
-
-
-
-##########################
-# Brownian diffusion model
-# Warning poor performance
-##########################
-
-def compute_log_probability(prior_arr, 
-                            empirical_val):
-
-    '''
-    
-    '''
-
-    mean = np.mean(prior_arr)
-    std_dev = np.std(prior_arr)
-    probability_density = norm.pdf(empirical_val, mean, std_dev)
-    return np.log(probability_density)
-
-
-def parameterise_sample_size(G,
-                             min_sample_size, 
-                             max_sample_size, 
-                             step):
-    
-    '''
-    
-    '''
-    
-    probabilities = []
-    for sample_size in np.arange(min_sample_size, max_sample_size, step):
-        G_n_eigh = compute_elementary_landscape(G=G, n=5)
-        dir_eigh = compute_dirichlet_energy(G=G_n_eigh)
-
-        prior_dist = sample_prior_dist(G, 
-                                       sample_size=sample_size, 
-                                       ruggedness_fn=compute_dirichlet_energy,
-                                       replicates=10)
-        mean = np.mean(prior_dist)
-        std_dev = np.std(prior_dist)
-        probabilities.append(norm.pdf(dir_eigh, mean, std_dev))
-
-    max_val = max(x for x in probabilities if not math.isnan(x))
-    optimal_idx = probabilities.index(max_val)
-    
-    return np.arange(min_sample_size, max_sample_size, step)[optimal_idx], probabilities[optimal_idx]
-
-def sample_prior_dist(G, 
-                      sample_size, 
-                      ruggedness_fn, 
-                      replicates=100, 
-                      fluctuation_scale=0,
-                      local=False):
-
-    '''
-    
-    '''
-
-    prior_dist = []
-    local_dir_dict = {}
-    for _, _ in enumerate(range(replicates)):
-
-        G_cpy = G.copy()
-        G_sampled, _, _ = sample_graph(G=G_cpy, sample_size=sample_size)
-        brownian_diffusion(G=G_sampled, fluctuation_scale=fluctuation_scale)
-        if not local:
-            prior_dist.append(ruggedness_fn(G_sampled))
-        else:
-            compute_local_dirichlet_energy(G=G_sampled)
-            for node in G_sampled.nodes():
-                if node in local_dir_dict.keys():
-                    local_dir_dict[node] += [G_sampled.nodes[node]['local_dirichlet']]
-                else:
-                    local_dir_dict[node] = [G_sampled.nodes[node]['local_dirichlet']]
-
-    
-    if not local:
-        return np.array(prior_dist)
-    else:
-        return local_dir_dict
-    
-def brownian_diffusion(G, fluctuation_scale):
-
-    '''
-    
-    '''
-
-    if not nx.is_connected(G):
-        raise Exception('More than a single connected component in the graph. All nodes must be connected.')
-
-    iterations = len(G) ** 2
-
-    for _ in range(iterations):
-
-        values = [G.nodes[node]['value'] for node in G.nodes()]
-        if not np.any(np.isnan(values)):
-            break
-
-        new_values = {}
-        for node in G.nodes():
-            neighbors = list(G.neighbors(node))
-            avg_neighbor_signal = np.nanmean([G.nodes[neighbor]['value'] for neighbor in neighbors])
-            fluctuation = np.random.randn() * fluctuation_scale
-            
-            if np.isnan(G.nodes[node]['value']):
-                new_values[node] = avg_neighbor_signal + fluctuation
-            else:
-                new_values[node] = (G.nodes[node]['value'] + avg_neighbor_signal) / 2 + fluctuation
-        
-        for node in new_values:
-            G.nodes[node]['value'] = new_values[node]
