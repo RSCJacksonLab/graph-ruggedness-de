@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import math
 from scipy.stats import norm
+from scipy import stats
 
 def compute_log_probability(prior_arr: list, 
                             empirical_val: float,
@@ -101,6 +102,42 @@ def sample_prior_dist(G,
     else:
         return local_dir_dict
     
+
+def sample_rugged_prior_dist(G, 
+                      ruggedness_fn, 
+                      replicates=100, 
+                      local: bool =False):
+
+    '''
+    
+    '''
+
+    prior_dist = []
+    local_dir_dict = {}
+    for _, _ in enumerate(range(replicates)):
+
+        G_cpy = G.copy()
+        
+        G_sampled = random_sample(G=G_cpy)
+
+        if not local:
+            prior_dist.append(ruggedness_fn(G_sampled))
+        
+        else:
+            graph_ruggedness_de.compute_local_dirichlet_energy(G=G_sampled)
+            for node in G_sampled.nodes():
+                if node in local_dir_dict.keys():
+                    local_dir_dict[node] += [G_sampled.nodes[node]['local_dirichlet']]
+                else:
+                    local_dir_dict[node] = [G_sampled.nodes[node]['local_dirichlet']]
+
+    
+    if not local:
+        prior_arr = np.array(prior_dist)
+        return prior_arr[~np.isnan(prior_arr)] #Mask out any NaN values 
+    else:
+        return local_dir_dict
+    
 def brownian_diffusion(G, fluctuation_scale):
 
     '''
@@ -135,6 +172,27 @@ def brownian_diffusion(G, fluctuation_scale):
     
     return G
 
+def random_sample(G):
+
+    '''
+    
+    '''
+    G = G.copy()
+
+    if not nx.is_connected(G):
+        raise Exception('More than a single connected component in the graph. All nodes must be connected.')
+    
+    values = [G.nodes[node]['value'] for node in G.nodes()]
+    mean_value = np.mean(values)
+    std_value = np.std(values)
+
+    for node in G.nodes():
+            
+        G.nodes[node]['value'] = np.random.normal(loc=mean_value,
+                                                  scale=std_value)
+    
+    return G
+
 def sample_values(G: nx.Graph,
                   sample_size: float):
     '''
@@ -160,3 +218,20 @@ def sample_values(G: nx.Graph,
             G.nodes[node]['value'] = np.nan
 
     return G 
+
+def compute_marginal_likelihoods(h0_array: np.array,
+                                 h1_array: np.array,
+                                 empirical_val: float):
+    '''
+    
+    '''
+        
+    # Fit distributions (use log probabilities to avoid underflow)
+    mu_H0, std_H0 = stats.norm.fit(list(h0_array))
+    mu_H1, std_H1 = stats.norm.fit(list(h1_array))
+
+    # Compute log probabilities
+    log_P_E_given_H0 = stats.norm.logpdf(empirical_val, loc=mu_H0, scale=std_H0)
+    log_P_E_given_H1 = stats.norm.logpdf(empirical_val, loc=mu_H1, scale=std_H1)
+
+    return log_P_E_given_H1 - log_P_E_given_H0
