@@ -1,54 +1,16 @@
 import networkx as nx
-from graph_fourier_transform import compute_laplacian
+from gaussian_markov_random_field import compute_laplacian_spectrum
 from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans
+import random
 
 
-
-def transform(fitness: float,
-              a: float,
-              t: float) -> float: 
-    '''
-    Funciton to update the fitness value according to the difference
-    between a threshold value `t` and the the current fitness value.
-
-    Arguments:
-    ----------
-    fitness: float
-        The current fitness value.
-    
-    a: float
-        The selection pressure on `fitness` that is in effect below
-        the threshold value `t`. The scaler of the different in
-        `t` - `fitness`.
-
-    t: float
-        The threshold value, below which a fitness value `fitness` is
-        reduced in the updated fitness value. 
-    
-    Returns:
-    --------
-    updated_fitness: float
-        The updated fitness value once it has passed through the
-        transformation.
-    '''
-
-    if fitness > t:
-        return fitness
-    else:
-        g_x = a * ((t - fitness))
-        f_x = fitness - g_x
-        updated_fitness = max(f_x, 0)
-
-        return updated_fitness
-    
-def spectral_cluster(G: nx.graph,
-                     k: int):
+def spectral_cluster(G: nx.Graph, k: int):
     '''
     Function to perform spectral clustering according to the Fiedler
     method. Performs spectral embedding into the `1:k+1` Laplacian
     eigenvectors and clusters by K-means.
-
+    
     Arguments:
     ----------
     G: nx.Graph
@@ -63,23 +25,47 @@ def spectral_cluster(G: nx.graph,
     G_clstr: nx.Graph
         The clustered landscape. 
     '''
-
-    laplacian = compute_laplacian(G=G)
-    eigenvalues, eigenvectors = eigsh(laplacian, k=k)
-    kmeans = KMeans(n_clusters=k).fit(eigenvectors)
+    laplacian = nx.laplacian_matrix(G, weight='inv_weight').asfptype()
+    eigenvalues, eigenvectors = eigsh(laplacian, k=k+1, which='SM')
+    embedding = eigenvectors[:, 1:]  # Exclude the first eigenvector
+    kmeans = KMeans(n_clusters=k).fit(embedding)
     labels = kmeans.labels_
 
     G_clstr = G.copy()
-
     for i, node in enumerate(G.nodes()):
         G_clstr.nodes[node]['spectral_cluster'] = labels[i]
     
     return G_clstr
 
+def assign_clustered_values(G: nx.Graph):
+    '''
+    Assigns 'value' attribute to nodes based on their spectral cluster.
+    Selects one cluster randomly and assigns value 1 to its nodes,
+    and 0 to others.
+
+    Arguments:
+    ----------
+    G: nx.Graph
+        The graph with 'spectral_cluster' attribute assigned to nodes.
+
+    Returns:
+    --------
+    G: nx.Graph
+        The graph with 'value' attribute assigned to nodes.
+    '''
+    clstrs = set([node[1]['spectral_cluster'] for node in G.nodes(data=True)])
+    clstr = random.choice(list(clstrs))
+
+    for node in G.nodes(data=True):
+        if node[1]['spectral_cluster'] == clstr:
+            G.nodes[node[0]]['value'] = 1
+        else:
+            G.nodes[node[0]]['value'] = 0
+
+    return G
 
 
-def count_deltaS(G: nx.Graph,
-             t: float):
+def count_deltaS(G: nx.Graph):
     '''
     
     '''
@@ -87,18 +73,17 @@ def count_deltaS(G: nx.Graph,
     for u, v in G.edges():
         value_u = G.nodes[u]['value']
         value_v = G.nodes[v]['value']
-        if (value_u > t and value_v < t) or (value_u < t and value_v > t):
+        if (value_u == 1 and value_v == 0) or (value_u == 0 and value_v == 1):
             count += 1
     return count
 
-def count_epsilonS(G: nx.Graph,
-                   t: float):
+def count_epsilonS(G: nx.Graph):
     '''
     '''
     count = 0
     for u, v in G.edges():
         value_u = G.nodes[u]['value']
         value_v = G.nodes[v]['value']
-        if value_u > t and value_v > t:
+        if value_u == 1 and value_v == 1:
             count += 1
     return count
