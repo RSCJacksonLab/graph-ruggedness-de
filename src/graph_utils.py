@@ -25,7 +25,7 @@ def visualize_signal_over_graph(G,
             edgecolors='black',
             node_size=nodesize,
             width=edgewidth,
-            edge_color='grey',
+            edge_color='#C6C6C6',
             ax=ax)
 
     ax.axis('off')

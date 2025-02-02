@@ -164,3 +164,8 @@ testing_env*
 testing*
 figures/
 si_figures/
+submit_all.sh
+folding_data_checkpoint*
+prot_data_checkpoint*
+figure_notebooks/
+.DS_store*

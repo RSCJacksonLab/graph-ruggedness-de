@@ -224,55 +224,8 @@ def compute_gmrf_ruggedness(G: nx.Graph,
 
         z_score = np.abs((log_likelihood_H0 - np.mean(h0_likelihoods)) / np.std(h0_likelihoods, ddof=1))
         
-        return z_score
+        return z_score, log_likelihood_H0
     
     else:
         return log_likelihood_H0, log_det, quadratic_form
 
-
-##Wrappers for H1 
-
-def compute_log_likelihood_H1(f_hat,
-                              eigenvalues,
-                              t1,
-                              sigma_squared,
-                              epsilon=1e-8,
-                              standardised: bool = True,
-                              draw_samples: bool = True,
-                              eigenvectors = None,
-                              replicates: int = 10
-                              ):
-    '''
-    
-    '''
-    return compute_log_likelihood_H0(f_hat=f_hat,
-                              eigenvalues=eigenvalues,
-                              t=t1,
-                              sigma_squared=sigma_squared,
-                              epsilon=epsilon,
-                              standardised=standardised,
-                              draw_samples=draw_samples,
-                              eigenvectors=eigenvectors,
-                              replicates=replicates
-                              )
-
-
-def generate_sample_H1(G:nx.Graph,
-                       t1: float,
-                       sigma_squared: float=None):
-    '''
-    
-    '''
-    return generate_sample_H0(G=G,
-                              sigma_squared=sigma_squared,
-                              t=t1)
-
-def compute_marginal_variances_H1(G:nx.Graph,
-                                  t1: float,
-                                  sigma_squared: float=None):
-    '''
-    
-    '''
-    return compute_marginal_variances_H0(G=G,
-                                         sigma_squared=sigma_squared,
-                                         t=t1)

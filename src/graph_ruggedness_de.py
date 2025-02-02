@@ -207,7 +207,8 @@ def ensure_full_connectivity(G: nx.Graph):
                            distance=min_distance,
                            inv_weight=1/min_distance)
 
-def add_hamming_edges(G):
+def add_hamming_edges(G,
+                      threshold: int = 1):
     '''
     Inplace function to compute hamming neighbor edges to a OHE graph.
     Hamming edges are computed using scipy.spatial.distance_matrix,
@@ -217,6 +218,9 @@ def add_hamming_edges(G):
     ----------
     G: networkX.Graph
         A networkX graph of OHE sequences as nodes.  
+
+    threshold: int, default=`1`
+        The mutation threshold to add an edge.
     '''
 
     sequences = list(G.nodes())
@@ -230,7 +234,6 @@ def add_hamming_edges(G):
     dist_mat = squareform(distances)
 
     # Threshold for Hamming distance
-    threshold = 1
 
     # Get indices where distance <= threshold
     i_upper, j_upper = np.triu_indices_from(dist_mat, k=1)
