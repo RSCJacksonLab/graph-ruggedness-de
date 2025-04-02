@@ -34,6 +34,26 @@ def compute_laplacian_spectrum(G: nx.Graph):
     
     return laplacian, eigenvalues, eigenvectors
 
+def precompute_GMRF_stats(G: nx.Graph,
+                          epsilon: float) -> tuple:
+    """
+
+    """
+    laplacian = nx.normalized_laplacian_matrix(G, weight='inv_weight').asfptype()
+    L_dense = laplacian.toarray()
+    eigenvalues, eigenvectors = np.linalg.eigh(L_dense)
+    # Sort by ascending eigenvalue:
+    idx = np.argsort(eigenvalues)
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+    
+    signal = np.array([G.nodes[node]['value'] for node in G.nodes()])
+    mu = np.mean(signal)
+    signal_centered = signal - mu
+    f_hat = eigenvectors.T @ signal_centered
+    sigma_squared = np.var(signal_centered, ddof=1)
+    return f_hat, eigenvalues, sigma_squared
+
 
 def standardise_likelihoods(log_likelihood: float,
                             sigma_squared: float,
@@ -90,7 +110,6 @@ def compute_log_likelihood_H0(f_hat,
                               sigma_squared,
                               epsilon=1e-8,
                               ):
-
 
     n = len(f_hat)
 
