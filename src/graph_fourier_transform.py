@@ -5,7 +5,7 @@ def graph_fourier_transform(G: nx.Graph,
                             edge_weights: bool = False,
                             return_norm: bool = True,
                             absolute_val: bool = True):
-    '''
+    """
     Function to perform graph Fourier transform on a OHE networkX graph
     with fitness values stores as "value" node attributes. The GFT
     beta coefficients (i.e magnitudes) are returned as absolute values
@@ -36,7 +36,7 @@ def graph_fourier_transform(G: nx.Graph,
         Numpy array of graph Fourier transform beta coefficients (i.e.
         magnitudes) as absolute values that have been normalised to 
         sum to 1.0. 
-    '''
+    """
     
     laplacian = nx.laplacian_matrix(G)
     eigenvalues, eigenvectors = np.linalg.eigh(laplacian.toarray())

@@ -5,7 +5,8 @@ from sklearn.cluster import KMeans
 import random
 
 
-def spectral_cluster(G: nx.Graph, k: int):
+def spectral_cluster(G: nx.Graph,
+                     k: int) -> nx.Graph:
     '''
     Function to perform spectral clustering according to the Fiedler
     method. Performs spectral embedding into the `1:k+1` Laplacian
@@ -37,7 +38,7 @@ def spectral_cluster(G: nx.Graph, k: int):
     
     return G_clstr
 
-def assign_clustered_values(G: nx.Graph):
+def assign_clustered_values(G: nx.Graph) -> nx.Graph:
     '''
     Assigns 'value' attribute to nodes based on their spectral cluster.
     Selects one cluster randomly and assigns value 1 to its nodes,
@@ -65,9 +66,19 @@ def assign_clustered_values(G: nx.Graph):
     return G
 
 
-def count_deltaS(G: nx.Graph):
+def count_deltaS(G: nx.Graph) -> int:
     '''
+    Function to cound the number of edges in deltaS.
     
+    Arguments:
+    ----------
+    G : nx.Graph
+        The fitness landscape graph.
+    
+    Returns:
+    --------
+    count : int
+        The number of edges in delta S.
     '''
     count = 0
     for u, v in G.edges():
@@ -77,8 +88,19 @@ def count_deltaS(G: nx.Graph):
             count += 1
     return count
 
-def count_epsilonS(G: nx.Graph):
+def count_epsilonS(G: nx.Graph) -> int:
     '''
+    Function to cound the number of edges in epsilon S.
+    
+    Arguments:
+    ----------
+    G : nx.Graph
+        The fitness landscape graph.
+    
+    Returns:
+    --------
+    count : int
+        The number of edges in epsilon S.
     '''
     count = 0
     for u, v in G.edges():

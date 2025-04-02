@@ -8,7 +8,7 @@ import graph_ruggedness_de
 
 def create_random_tree(num_nodes: int, 
                        mean_length: float,
-                       std_dev_length: float):
+                       std_dev_length: float) -> Tree:
     '''
     Function to create a random phylogenetic tree using ETE3 package. 
 
@@ -49,7 +49,7 @@ def sequence_evolution(num_nodes: int,
                        alpha: float,
                        model: str,
                        rate_categories: int,
-                       sequence_length: int):
+                       sequence_length: int) -> dict:
     '''
     Function to evolve amino acid sequences over randomised
     phylogenetic trees. Note that parameters (such as alignment) are 
@@ -105,7 +105,7 @@ def sequence_evolution(num_nodes: int,
     
     return sequences
 
-def sample_sequences(sample_size: int):
+def sample_sequences(sample_size: int) -> tuple:
     '''
     Function to simulate sequence evolution over phylogenetic trees 
     with randomly sampled evolutionary parameters.

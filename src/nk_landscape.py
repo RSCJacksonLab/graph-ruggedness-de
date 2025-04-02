@@ -1,12 +1,11 @@
 import networkx as nx
 import random
-import itertools
 import numpy as np
 
 def generate_nk_landscape_amino_acids(N: int,
                                       K: int,
                                       amino_acids: list=None,
-                                      max_size: int=np.inf):
+                                      max_size: int=np.inf) -> nx.Graph:
     '''
     Generates an NK landscape for amino acid sequences and returns it
     as a NetworkX graph.

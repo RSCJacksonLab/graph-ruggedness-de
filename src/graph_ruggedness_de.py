@@ -16,7 +16,7 @@ from sklearn.preprocessing import LabelEncoder
 
 
 def sample_graph(G: nx.Graph,
-                 sample_size: float):
+                 sample_size: float) -> tuple:
     '''
     Function to subsample a networkX graph according to a sampling 
     proportion. 
@@ -72,7 +72,8 @@ def sample_graph(G: nx.Graph,
     return G_sampled, sampled_nodes, sampled_values
 
 def add_ohe_knn_edges(G: nx.Graph,
-                      k: int):
+                      k: int,
+                      verbose: bool = True) -> None:
     '''
     Inplace function to compute K-nearest neighbor edges to a OHE
     graph. KNN edges are computed using scipy.spatial.distance_matrix,
@@ -111,13 +112,16 @@ def add_ohe_knn_edges(G: nx.Graph,
              if not G.has_edge(sequences[i], sequences[j])]
 
     G.add_edges_from(edges)
-    print(f'Added {len(edges)} KNN edges.')
+    
+    if verbose: 
+        print(f'Added {len(edges)} KNN edges.')
 
     # Ensure full connectivity
     ensure_full_connectivity(G)    
 
 def add_ohe_knn_edges_approx(G: nx.Graph,
-                             k: int):
+                             k: int,
+                             verbose : bool = True) -> None:
     '''
     Inplace function to compute K-nearest neighbor edges to a OHE
     graph. KNN edges are annoy approximate package, which is an
@@ -137,16 +141,24 @@ def add_ohe_knn_edges_approx(G: nx.Graph,
     ohe_list = [G.nodes[seq]['ohe'] for seq in sequences]
     
     f = ohe_list[0].shape[0]
-    print('Building approx. NN index.')
+    if verbose:
+        print('Building approx. NN index.')
+
     t = annoy.AnnoyIndex(f, 'hamming')
-    print('Done.')
+    
+    if verbose:
+        print('Done.')
 
     for i, vec in tqdm(enumerate(ohe_list), desc='Adding OHE vectors to index.'):
         t.add_item(i, vec)
 
-    print('Building approx. NN search tree(s).')
-    t.build(2) #TODO: test trade-off in accuracy speed for more trees in forest. 
-    print('Done.')
+    if verbose:
+        print('Building approx. NN search tree(s).')
+
+    t.build(2) 
+    
+    if verbose:
+        print('Done.')
     
     for _, i in tqdm(enumerate(range(len(ohe_list))), desc='Adding approximate KNN edges.'):
     # Fetch the 'n' nearest neighbors for the item
@@ -164,7 +176,8 @@ def add_ohe_knn_edges_approx(G: nx.Graph,
     # Add edges between disconnected components to ensure full connectivity
     ensure_full_connectivity(G=G)
 
-def ensure_full_connectivity(G: nx.Graph):
+def ensure_full_connectivity(G: nx.Graph,
+                             verbose: bool = True) -> None:
     '''
     Function to ensure that a graph is fully connected by adding edges
     between disconnected components based on the closest pair of nodes
@@ -177,7 +190,9 @@ def ensure_full_connectivity(G: nx.Graph):
     '''
     if not nx.is_connected(G):
         
-        print('Connecting components')
+        if verbose:
+            print('Connecting components')
+
         components = list(nx.connected_components(G))
         
         # Sort components by size (optional, to connect smaller components first)
@@ -208,7 +223,8 @@ def ensure_full_connectivity(G: nx.Graph):
                            inv_weight=1/min_distance)
 
 def add_hamming_edges(G,
-                      threshold: int = 1):
+                      threshold: int = 1,
+                      verbose: bool = True) -> None:
     '''
     Inplace function to compute hamming neighbor edges to a OHE graph.
     Hamming edges are computed using scipy.spatial.distance_matrix,
@@ -244,62 +260,14 @@ def add_hamming_edges(G,
     # Add edges
     edges_to_add = [(sequences[i], sequences[j]) for i, j in zip(i_edges, j_edges)]
     G.add_edges_from(edges_to_add)
-    print(f'Added {len(edges_to_add)} Hamming edges.')
-
-def _add_hamming_edges_approx(G: nx.Graph, #BUG Broken
-                             n: int):
-    '''
-    Inplace function to compute hamming neighbor edges to a OHE graph.
-    Hamming edges are computed using annoy, which is approximate. Trade
-    off between accuracy and speed can be improved by changing the
-    number of trees in the index. 
-
-    Arguments:
-    ----------
-    G: networkX.Graph
-        A networkX graph of OHE sequences as nodes. 
     
-    n: int
-        The number of edges to add between each node. Assumes that the
-        OHE dataset in the graph is exhaustive and combinatorially
-        complete. 
-    '''
-    sequences = list(G.nodes())
-    ohe_list = [G.nodes[seq]['ohe'] for seq in sequences]
-
-    #TODO: Threshold distance is not correct - no edges in graph are produced. 
-    f = len(ohe_list[0])  # Length of the one-hot encoded vectors
-    threshold_distance = 1.0 / f  # Calculating threshold for a Hamming distance of 1
-    
-    f = ohe_list[0].shape[0]
-    print('Building approx. NN index.')
-    t = annoy.AnnoyIndex(f, 'hamming')
-    print('Done.')
-
-    for i, vec in tqdm(enumerate(ohe_list), desc='Adding OHE vectors to index.'):
-        t.add_item(i, vec)
-
-    print('Building approx. NN search tree(s).')
-    t.build(2) #TODO: test trade-off in accuracy speed for more trees in forest. 
-    print('Done.')
-    
-    for _, i in tqdm(enumerate(range(len(ohe_list))), desc='Adding approximate hamming edges.'):
-    # Fetch the 'n' nearest neighbors for the item
-        nn_indices, distances = t.get_nns_by_item(i,
-                                                  n,
-                                                  include_distances=True,
-                                                  search_k=-1)
-        for idx, j in enumerate(nn_indices):
-            if i != j and distances[idx] <= threshold_distance:
-                if not G.has_edge(sequences[i], sequences[j]):
-                    G.add_edge(sequences[i], sequences[j])
-
+    if verbose:
+        print(f'Added {len(edges_to_add)} Hamming edges.')
 
 def build_ohe_graph(seq_ls,
-                    values, edges=True,
-                    hamming_edges=False,
-                    approximate=False,
-                    n=None):
+                    values, edges: bool = True,
+                    hamming_edges: bool = False,
+                    approximate: bool = False) -> nx.Graph:
     '''
     Function to build OHE graph with either hamming or KNN edges. 
 
@@ -372,7 +340,7 @@ def build_ohe_graph(seq_ls,
     return G
 
 def compute_local_dirichlet_energy(G: nx.Graph,
-                                   approximate: bool = False):
+                                   approximate: bool = False) -> None:
 
     '''
     Inplace function to compute the nodewise local Dirichlet energy. 
@@ -417,7 +385,7 @@ def compute_local_dirichlet_energy(G: nx.Graph,
         G.nodes[node]['local_dirichlet'] = local_dirichlet
 
 def compute_dirichlet_energy(G: nx.Graph,
-                             edge_weights: bool = False):
+                             edge_weights: bool = False) -> float:
 
     '''
     Function to compute the Dirichlet energy over a graph. The energy
@@ -449,11 +417,8 @@ def compute_dirichlet_energy(G: nx.Graph,
     dir_en = y @ laplacian @ y
     return dir_en
 
-    # TODO: normalisation by average OHE edge length to make more interpretable. 
-    return dir_en
-
 def compute_dirichlet_energy_approximate(G: nx.Graph, 
-                                         edge_weights: bool = False):
+                                         edge_weights: bool = False) -> float:
     '''
     Function to compute the Dirichlet energy over a graph. The energy
     is computed as summed square of differences in fitness over each 
@@ -495,7 +460,7 @@ def compute_dirichlet_energy_approximate(G: nx.Graph,
 
 def compute_pairwise_difference(edge: tuple,
                                 G: nx.Graph,
-                                edge_weights: bool = False):
+                                edge_weights: bool = False) -> float:
     '''
     Objective function of parallel, approximate dirichlet energy
     calculation. 
@@ -526,7 +491,7 @@ def compute_pairwise_difference(edge: tuple,
 
 def compute_elementary_landscape(G: nx.Graph,
                                  n: int,
-                                 edge_weights: bool = False):
+                                 edge_weights: bool = False) -> nx.Graph:
     '''
     Function to compute the nth eigenvector of the Laplacian matrix
     from a OHE network graph with either hamming or KNN edges. 
