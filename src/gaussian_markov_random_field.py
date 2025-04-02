@@ -1,9 +1,8 @@
 import numpy as np
 import networkx as nx
-from scipy.sparse.linalg import eigsh
 
-def compute_laplacian_spectrum(G: nx.Graph):
-    '''
+def compute_laplacian_spectrum(G: nx.Graph) -> tuple:
+    """
     Computes the eigenvalues and eigenvectors of the Laplacian matrix
     of graph G.
     
@@ -22,7 +21,7 @@ def compute_laplacian_spectrum(G: nx.Graph):
 
     eigenvectors : np.ndarray
         The computed eigenvectors.
-    '''
+    """
     
     laplacian = nx.normalized_laplacian_matrix(G, weight='inv_weight').asfptype()
     L_dense = laplacian.toarray()
@@ -34,10 +33,25 @@ def compute_laplacian_spectrum(G: nx.Graph):
     
     return laplacian, eigenvalues, eigenvectors
 
-def precompute_GMRF_stats(G: nx.Graph,
-                          epsilon: float) -> tuple:
+def precompute_GMRF_stats(G: nx.Graph) -> tuple:
     """
+    Function to precompute GMRF spectral and statistical quantities.
 
+    Arguments:
+    ----------
+    G : nx.Graph
+        The fitness landscape graph. 
+    
+    Returns:
+    --------
+    f_hat : np.array
+        The Fourier transformed graph signal. 
+    
+    eigenvalues : np.array  
+        The Laplacian eigenvalues. 
+    
+    sigma_squared : float
+        The empirical variance in the signal. 
     """
     laplacian = nx.normalized_laplacian_matrix(G, weight='inv_weight').asfptype()
     L_dense = laplacian.toarray()
@@ -55,61 +69,44 @@ def precompute_GMRF_stats(G: nx.Graph,
     return f_hat, eigenvalues, sigma_squared
 
 
-def standardise_likelihoods(log_likelihood: float,
-                            sigma_squared: float,
-                            t: float,
-                            epsilon: float = 1e-8,
-                            G: nx.Graph = None,
-                            eigenvectors: np.ndarray = None,
-                            eigenvalues: np.ndarray = None,
-                            samples: int = 100):
-    '''
+def compute_log_likelihood_H0(f_hat: np.ndarray,
+                              eigenvalues: np.ndarray,
+                              t: float,
+                              sigma_squared: float,
+                              epsilon: float = 1e-8,
+                              ) -> tuple:
+    """
+    Function to compute the log likelihood under a GMRF landscape
+    model. 
+
+    Arguments:
+    ----------
+    f_hat : np.array    
+        The graph signal transformed into the Fourier basis. 
     
-    '''
-
-    #Perform spectral decomposition of Laplacian only once.
-    if G is not None:
-        laplacian, eigenvalues, eigenvectors = compute_laplacian_spectrum(G=G)
-    else: 
-        assert eigenvalues is not None and eigenvectors is not None
-
-
-    # List to store likelihoods
-    h0_likelihoods = []
-
-    for _ in range(samples):
-        # Generate a sample under H0
-        h0_sample = generate_sample_H0(sigma_squared = sigma_squared,
-                                       t=t,
-                                       epsilon=epsilon,
-                                       eigenvalues=eigenvalues,
-                                       eigenvectors=eigenvectors)
-        #GFT of sample
-        f_hat = eigenvectors.T @ h0_sample
-
-        sigma_squared_sample = np.var(h0_sample, ddof=1)
-
-        # Compute the log-likelihood of sample under H0
-        h0_likelihood,  _, _ = compute_log_likelihood_H0(f_hat=f_hat,
-                                                         eigenvalues=eigenvalues,
-                                                         t=t,
-                                                         sigma_squared=sigma_squared_sample,
-                                                         epsilon=epsilon)
-        
-        h0_likelihoods.append(h0_likelihood)
-
-    #Compute Z-score of empirical log likelihood.
-    z_score = np.abs((log_likelihood - np.mean(h0_likelihoods)) / np.std(h0_likelihoods, ddof=1))
-
-    return z_score
-
-
-def compute_log_likelihood_H0(f_hat,
-                              eigenvalues,
-                              t,
-                              sigma_squared,
-                              epsilon=1e-8,
-                              ):
+    eigenvalues : np.ndarray    
+        The Graph Laplacian eigenvalues. 
+    
+    t : float
+        The heat diffusion kernel timestep parameter. 
+    
+    sigma_squared : float
+        The empirical variance in the signal. 
+    
+    epsilon : float, default = `1e-8`.
+        Small float for numerical stability.
+    
+    Returns:
+    --------
+    log_likelihood : float
+        The log likelihood. 
+    
+    log_det : float
+        The log determinant of the Gaussian. 
+    
+    quadratic form : float
+        The qudratic form of the Gaussian. 
+    """
 
     n = len(f_hat)
 
@@ -144,10 +141,32 @@ def generate_sample_H0(sigma_squared: float,
                        epsilon: float = 1e-8,
                        G: nx.Graph = None,
                        eigenvectors: np.ndarray = None,
-                       eigenvalues: np.ndarray = None):
-    '''
+                       eigenvalues: np.ndarray = None) -> np.ndarray:
+    """
+    Function to generate a realization of the GMRF.
+
+    Arguments:
+    ----------
+    eigenvectors : np.ndarray   
+        The Graph Laplacian eigenvectors.
+
+    eigenvalues : np.ndarray    
+        The Graph Laplacian eigenvalues. 
     
-    '''
+    t : float
+        The heat diffusion kernel timestep parameter. 
+    
+    sigma_squared : float
+        The empirical variance in the signal. 
+    
+    epsilon : float, default = `1e-8`.
+        Small float for numerical stability.
+
+    Returns:
+    --------
+    sample_H0 : np.ndarray  
+        The signal vector sampled under the GMRF.
+    """
     if G is not None:
         laplacian, eigenvalues, eigenvectors = compute_laplacian_spectrum(G=G)
     else: 
@@ -170,10 +189,36 @@ def compute_variances_H0(sigma_squared: float,
                          epsilon: float = 1e-8,
                          G: nx.Graph = None,
                          eigenvectors: np.ndarray = None,
-                         eigenvalues: np.ndarray = None):
-    '''
+                         eigenvalues: np.ndarray = None) -> tuple:
+    """
+    Function to compute the variance vector and covariance matrix of a
+    GMRF.
+
+    Arguments:
+    ----------
+    eigenvectors : np.ndarray   
+        The Graph Laplacian eigenvectors.
+
+    eigenvalues : np.ndarray    
+        The Graph Laplacian eigenvalues. 
     
-    '''
+    t : float
+        The heat diffusion kernel timestep parameter. 
+    
+    sigma_squared : float
+        The empirical variance in the signal. 
+    
+    epsilon : float, default = `1e-8`.
+        Small float for numerical stability.
+
+    Returns:
+    --------
+    variances_H0 : np.ndarray  
+        The variance (the diagonal of the covariance matrix).
+    
+    Sigma_H0 : np.ndarray
+        The covariance matrix. 
+    """
 
     if G is not None:
         laplacian, eigenvalues, eigenvectors = compute_laplacian_spectrum(G=G)
@@ -189,62 +234,4 @@ def compute_variances_H0(sigma_squared: float,
     variances_H0 = np.diag(Sigma_H0)
     return variances_H0, Sigma_H0
 
-
-def compute_gmrf_ruggedness(G: nx.Graph,
-                            t0: float = None,
-                            standardise: bool = False,
-                            samples: int = None):
-    '''
-
-    '''
-    laplacian, eigenvalues, eigenvectors = compute_laplacian_spectrum(G=G)
-    
-    signal = np.array([G.nodes[node]['value'] for node in G.nodes()])
-    sigma_squared = np.var(signal, ddof=1)
-    #Normalise signal so that the average = 0
-    mu = np.average(signal)
-    signal = signal - mu
-
-    #Compute GFT
-    f_hat = eigenvectors.T @ signal
-
-    log_likelihood_H0, log_det, quadratic_form = compute_log_likelihood_H0(f_hat=f_hat,
-                                                                           eigenvalues=eigenvalues,
-                                                                           t=t0,
-                                                                           sigma_squared=sigma_squared)
-    
-    if standardise:
-        
-        assert samples is not None
-
-        signal = np.array([G.nodes[node]['value'] for node in G.nodes()])
-        sigma_squared = np.var(signal, ddof=1)
-
-        h0_likelihoods = []
-
-        for _ in range(samples):
-
-            # Generate a sample under H0
-            h0_sample = generate_sample_H0(
-                G=G,
-                t=t0,
-                sigma_squared=sigma_squared
-            )
-
-            G_cpy = G.copy()
-            for i, node in enumerate(G_cpy.nodes()):
-                G_cpy.nodes[node]['value'] = h0_sample[i]
-            
-            # Recursively compute the log-likelihood under H0
-            h0_likelihood, _, _ = compute_gmrf_ruggedness(G=G_cpy,
-                                                          t0=t0,
-                                                          standardise=False)
-            h0_likelihoods.append(h0_likelihood)
-
-        z_score = np.abs((log_likelihood_H0 - np.mean(h0_likelihoods)) / np.std(h0_likelihoods, ddof=1))
-        
-        return z_score, log_likelihood_H0
-    
-    else:
-        return log_likelihood_H0, log_det, quadratic_form
 

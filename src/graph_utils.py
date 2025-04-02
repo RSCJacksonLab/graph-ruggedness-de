@@ -1,15 +1,14 @@
 import networkx as nx
-import numpy as np 
 import matplotlib.pyplot as plt
-from typing import Literal
+import numpy as np
 
-def visualize_signal_over_graph(G,
-                                signal,
+def visualize_signal_over_graph(G: nx.Graph,
+                                signal: np.ndarray,
                                 pos,
                                 ax=None,
                                 cmap: str = 'viridis',
                                 nodesize: float = 65,
-                                edgewidth: float = 0.85):
+                                edgewidth: float = 0.85) -> tuple:
     '''
     Visualizes a signal over a graph using a specified colormap.
     '''
